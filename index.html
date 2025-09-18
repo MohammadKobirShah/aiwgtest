@@ -44,7 +44,6 @@
     }
     .prediction.hot { box-shadow:0 0 15px 2px #00ffcc; }
     .prediction.cold { box-shadow:0 0 15px 2px #ff3c6a; }
-    .prob { margin-top: 8px; font-size: 14px; color: #ffcc00; }
     .color-signal { text-align:center;}
     table {
       width:100%; border-collapse: collapse; margin-top:10px;
@@ -65,13 +64,16 @@
   <section id="probabilityTable"><h2>📋 Probability Table</h2></section>
 
 <script>
+// ✅ Fixed Fetch (handles "application/octet-stream")
 async function fetchResults() {
   const ts = Date.now();
-  // ⚠️ Using cors-anywhere proxy for demo (replace with own backend in prod)
-  const url = `https://cors-anywhere.herokuapp.com/https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json?ts=${ts}`;
+  const url = `https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json?ts=${ts}`;
   try {
-    let res = await fetch(url);
-    let data = await res.json();
+    let res = await fetch(url, { method: "GET" });
+
+    // Parse manually, because server sometimes sends octet-stream
+    let text = await res.text();
+    let data = JSON.parse(text);
 
     let numbers = [], colorsHistory = [];
     let resultsDiv = document.getElementById("results");
@@ -82,7 +84,9 @@ async function fetchResults() {
       colorsHistory.push(item.color.split(",")[0]);
       resultsDiv.innerHTML += `<div class="results-item">
         <span>Issue: <b>${item.issueNumber}</b></span>
-        <span>Result: <b>${item.number}</b> → <span class="badge ${item.color.split(",")[0]}">${item.color}</span></span>
+        <span>Result: <b>${item.number}</b> → 
+          <span class="badge ${item.color.split(",")[0]}">${item.color}</span>
+        </span>
       </div>`;
     });
 
@@ -92,8 +96,9 @@ async function fetchResults() {
     probabilityTable(numbers);
 
   } catch (err) {
-    console.error(err);
-    document.getElementById("results").innerHTML = "⚠️ API Error (CORS). Run through proxy/backend.";
+    console.error("Fetching error:", err);
+    document.getElementById("results").innerHTML =
+      "⚠️ API Fetch Error — check content-type or use proxy.";
   }
 }
 
@@ -106,18 +111,19 @@ function predict(numbers) {
   let hot = parseInt(sorted[0][0]);
   let cold = parseInt(sorted[sorted.length-1][0]);
 
-  // Cluster
   if(numbers[0]===numbers[1]) hot=numbers[0];
-  // Big/Small correction
   let last3=numbers.slice(0,3);
   if(last3.every(n=>n<=4)) hot=Math.floor(Math.random()*5+5);
   if(last3.every(n=>n>=5)) hot=Math.floor(Math.random()*5);
 
-  // Probabilities
   let hotProb=((countMap[hot]/total)*100).toFixed(1);
   let coldProb=((countMap[cold]/total)*100).toFixed(1);
 
-  function getColor(n){ if(n===0)return"red,violet"; if(n===5)return"green,violet"; return(n%2===0)?"red":"green"; }
+  function getColor(n){
+    if(n===0)return"red,violet";
+    if(n===5)return"green,violet";
+    return(n%2===0)?"red":"green";
+  }
 
   document.getElementById("prediction").innerHTML=`
     <h2>AI Predictions 🔮</h2>
@@ -174,6 +180,7 @@ function probabilityTable(numbers){
   document.getElementById("probabilityTable").innerHTML="<h2>📋 Probability Table</h2>"+table;
 }
 
+// auto load on page
 fetchResults();
 </script>
 </body>
