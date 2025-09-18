@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wingo AI Prediction Tool</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: 'Poppins', Arial, sans-serif;
+      background: linear-gradient(135deg, #0f2027, #2c5364);
+      color: #eee;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
+    header { padding: 15px; border-bottom: 2px solid #ffcc00; background: rgba(0,0,0,0.5);}
+    header h1 { margin: 0; color: #ffcc00; font-size: 26px; text-shadow: 0 0 10px #ffaa00; }
+    button {
+      background: #ffcc00; color: #000; padding: 12px 25px;
+      margin: 15px; border: none; border-radius: 30px;
+      font-weight: bold; cursor: pointer; transition: 0.3s;
+    }
+    button:hover { background: #ffaa00; transform: scale(1.05); }
+    section {
+      max-width: 900px; margin: 15px auto; padding: 20px;
+      border-radius: 15px; background: rgba(0,0,0,0.45); backdrop-filter: blur(8px);
+      box-shadow:0 0 15px rgba(0,0,0,0.5); text-align:left;
+    }
+    h2 { color: #00ffe0; margin-top: 0; text-align:center; }
+    .results-item {
+      display: flex; justify-content: space-between;
+      padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.15);
+    }
+    .badge { padding: 3px 8px; border-radius: 10px; font-size: 14px; font-weight: bold; }
+    .green { background:#2ecc71; }
+    .red { background:#e74c3c; }
+    .violet { background:#9b59b6; }
+    .prediction-box { display:flex; justify-content: space-around; flex-wrap: wrap; }
+    .prediction {
+      flex:1; min-width:120px; margin:8px; padding:15px;
+      border-radius:10px; background:rgba(255,255,255,0.07);
+      transition:0.3s; text-align:center;
+    }
+    .prediction.hot { box-shadow:0 0 15px 2px #00ffcc; }
+    .prediction.cold { box-shadow:0 0 15px 2px #ff3c6a; }
+    .prob { margin-top: 8px; font-size: 14px; color: #ffcc00; }
+    .color-signal { text-align:center;}
+    table {
+      width:100%; border-collapse: collapse; margin-top:10px;
+      text-align:center; font-size:15px;
+    }
+    th, td { border:1px solid rgba(255,255,255,0.2); padding:6px; }
+    th { background:rgba(255,255,255,0.1); color:#ffcc00; }
+  </style>
+</head>
+<body>
+  <header><h1>Wingo AI Prediction Tool 🔮</h1></header>
+  <button onclick="fetchResults()">🔄 Fetch Latest Results</button>
+
+  <section id="results"><h2>Latest Results</h2><p>Loading...</p></section>
+  <section id="prediction"><h2>AI Predictions</h2></section>
+  <section id="colorSignal"><h2>🎨 Color Analysis</h2></section>
+  <section id="chartContainer"><h2>📊 Number Frequency</h2><canvas id="myChart"></canvas></section>
+  <section id="probabilityTable"><h2>📋 Probability Table</h2></section>
+
+<script>
+async function fetchResults() {
+  const ts = Date.now();
+  // ⚠️ Using cors-anywhere proxy for demo (replace with own backend in prod)
+  const url = `https://cors-anywhere.herokuapp.com/https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json?ts=${ts}`;
+  try {
+    let res = await fetch(url);
+    let data = await res.json();
+
+    let numbers = [], colorsHistory = [];
+    let resultsDiv = document.getElementById("results");
+    resultsDiv.innerHTML = "<h2>Latest Results</h2>";
+
+    data.data.list.forEach(item => {
+      numbers.push(parseInt(item.number));
+      colorsHistory.push(item.color.split(",")[0]);
+      resultsDiv.innerHTML += `<div class="results-item">
+        <span>Issue: <b>${item.issueNumber}</b></span>
+        <span>Result: <b>${item.number}</b> → <span class="badge ${item.color.split(",")[0]}">${item.color}</span></span>
+      </div>`;
+    });
+
+    predict(numbers);
+    colorPrediction(colorsHistory);
+    showChart(numbers);
+    probabilityTable(numbers);
+
+  } catch (err) {
+    console.error(err);
+    document.getElementById("results").innerHTML = "⚠️ API Error (CORS). Run through proxy/backend.";
+  }
+}
+
+// 🔮 Prediction AI
+function predict(numbers) {
+  let countMap = {};
+  numbers.forEach(n => countMap[n] = (countMap[n]||0)+1);
+  let total = numbers.length;
+  let sorted = Object.entries(countMap).sort((a,b)=>b[1]-a[1]);
+  let hot = parseInt(sorted[0][0]);
+  let cold = parseInt(sorted[sorted.length-1][0]);
+
+  // Cluster
+  if(numbers[0]===numbers[1]) hot=numbers[0];
+  // Big/Small correction
+  let last3=numbers.slice(0,3);
+  if(last3.every(n=>n<=4)) hot=Math.floor(Math.random()*5+5);
+  if(last3.every(n=>n>=5)) hot=Math.floor(Math.random()*5);
+
+  // Probabilities
+  let hotProb=((countMap[hot]/total)*100).toFixed(1);
+  let coldProb=((countMap[cold]/total)*100).toFixed(1);
+
+  function getColor(n){ if(n===0)return"red,violet"; if(n===5)return"green,violet"; return(n%2===0)?"red":"green"; }
+
+  document.getElementById("prediction").innerHTML=`
+    <h2>AI Predictions 🔮</h2>
+    <div class="prediction-box">
+      <div class="prediction hot">
+        <h3>${hot}</h3>
+        <p class="badge ${getColor(hot).split(",")[0]}">${getColor(hot)}</p>
+        <p>🔥 Hot ~ ${hotProb}%</p>
+      </div>
+      <div class="prediction cold">
+        <h3>${cold}</h3>
+        <p class="badge ${getColor(cold).split(",")[0]}">${getColor(cold)}</p>
+        <p>❄️ Cold ~ ${coldProb}%</p>
+      </div>
+    </div>`;
+}
+
+// 🎨 Color Signal
+function colorPrediction(colors){
+  let last=colors[0], streak=1;
+  for(let i=1;i<colors.length;i++){ if(colors[i]===last)streak++; else break; }
+  let signal="";
+  if(streak>=2){ signal=(last==="green")?"🔮 Likely flip to RED next":"🔮 Likely flip to GREEN next"; }
+  else{ signal=(last==="green")?"🟢 GREEN may continue":"🔴 RED may continue"; }
+  document.getElementById("colorSignal").innerHTML=`
+    <h2>🎨 Color Signal</h2>
+    <p>Last Color: <b>${last}</b> (streak: ${streak})</p>
+    <p>${signal}</p>`;
+}
+
+// 📊 Chart
+function showChart(numbers){
+  let countMap={}; for(let i=0;i<10;i++)countMap[i]=0;
+  numbers.forEach(n=>countMap[n]++);
+  let ctx=document.getElementById('myChart').getContext('2d');
+  new Chart(ctx,{type:'bar',data:{labels:Object.keys(countMap),
+    datasets:[{label:'Frequency (last 10)',data:Object.values(countMap),backgroundColor:'#00ffccee'}]},
+    options:{scales:{y:{beginAtZero:true,ticks:{color:'white'}},x:{ticks:{color:'white'}}},
+    plugins:{legend:{labels:{color:'yellow'}}}}});
+}
+
+// 📋 Probability Table
+function probabilityTable(numbers){
+  let countMap={}; for(let i=0;i<10;i++) countMap[i]=0;
+  numbers.forEach(n=>countMap[n]++);
+  let total=numbers.length;
+  let table="<table><tr><th>Number</th><th>Probability %</th><th>Likely Color</th></tr>";
+  for(let i=0;i<10;i++){
+    let prob=((countMap[i]/total)*100).toFixed(1);
+    let color=(i===0?"red,violet":i===5?"green,violet":(i%2===0?"red":"green"));
+    table+=`<tr><td>${i}</td><td>${prob}%</td><td><span class="badge ${color.split(",")[0]}">${color}</span></td></tr>`;
+  }
+  table+="</table>";
+  document.getElementById("probabilityTable").innerHTML="<h2>📋 Probability Table</h2>"+table;
+}
+
+fetchResults();
+</script>
+</body>
+</html>
